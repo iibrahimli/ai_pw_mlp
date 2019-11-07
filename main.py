@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import mlp
+from mlp.network import network
 
 
 # --- read and preprocess data ---
@@ -12,7 +12,6 @@ feats = df.iloc[:, :4].values.astype(np.float32)
 print("data shape:", feats.shape)
 
 # standardize the data by column
-# feats, means, stds = standardize()
 
 
 # --- model ---
