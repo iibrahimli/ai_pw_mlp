@@ -56,6 +56,7 @@ class cost:
         raise NotImplementedError(f"{self.__class__.__name__}.backward() not implemented")
 
 
+# activation
 
 class tanh(activation):
     def forward(self, x):
@@ -73,7 +74,17 @@ class softmax(activation):
         pass
 
 
+# cost
+
 class categorical_crossentropy(cost):
+    def forward(self, y_true, y_pred):
+        pass
+
+    def backward(self, y_true, y_pred):
+        pass
+
+
+class binary_crossentropy(cost):
     def forward(self, y_true, y_pred):
         pass
 
