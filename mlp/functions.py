@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Activation, loss and other utility functions.
+Activation, loss and cost functions.
 
 Todo:
     * tanh
