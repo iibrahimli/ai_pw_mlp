@@ -23,15 +23,15 @@ class activation:
 
     """
 
-    def forward(self, x):
+    def forward(self, z):
         """
         Calculates the output
         """
         raise NotImplementedError(f"{self.__class__.__name__}.forward() not implemented")
 
-    def backward(self, y, x_cache):
+    def backward(self, z):
         """
-        Calculates the gradient wrt inputs
+        Calculates the gradient wrt z
         """
         raise NotImplementedError(f"{self.__class__.__name__}.backward() not implemented")
 
@@ -59,22 +59,39 @@ class cost:
 # activation
 
 class tanh(activation):
-    def forward(self, x):
-        pass
+    def forward(self, z):
+        return np.tanh(z)
 
-    def backward(self, y, x_cache):
-        pass
+    def backward(self, z):
+        return 1 - np.tanh(z)**2
+
+
+class sigmoid(activation):
+    def forward(self, z):
+        return 1 / (1 + np.exp(-z))
+
+    def backward(self, z):
+        s = self.forward(z)
+        return s * (1 - s)
 
 
 class softmax(activation):
-    def forward(self, x):
+    def forward(self, z):
         pass
 
-    def backward(self, y_cache, x_cache):
+    def backward(self, z):
         pass
 
 
 # cost
+
+class mean_squared_error(cost):
+    def forward(self, y_true, y_pred):
+        return np.mean((y_pred - y_true)**2)
+
+    def backward(self, y_true, y_pred):
+        return y_pred - y_true
+
 
 class categorical_crossentropy(cost):
     def forward(self, y_true, y_pred):
