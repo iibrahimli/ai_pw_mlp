@@ -19,7 +19,10 @@ def feat_normalize(x):
         maxs (np.ndarray): feature maximums
     """
 
-    pass
+    mins = x.min(axis=0)
+    maxs = x.max(axis=0)
+    res = (x - mins) / (maxs - mins)
+    return (res, mins, maxs)
 
 
 def feat_standardize(x):
@@ -38,7 +41,5 @@ def feat_standardize(x):
 
     means = x.mean(axis=0)
     stds = x.std(axis=0)
-
     res = (x - means) / stds
-
     return (res, means, stds)
