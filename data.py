@@ -36,4 +36,9 @@ def feat_standardize(x):
         stds (np.ndarray): feature standard deviations
     """
 
-    pass
+    means = x.mean(axis=0)
+    stds = x.std(axis=0)
+
+    res = (x - means) / stds
+
+    return (res, means, stds)
