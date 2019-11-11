@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import time
 import numpy as np
 from .functions import *
 
@@ -120,20 +121,18 @@ class network:
         return self.a[self.n_layers - 1]
 
 
-    def _update_params(self, index, dw, delta, lr):
+    def _update_params(self, update):
         """
         Apply the gradient to parameters
 
         Arguments:
-            index (int): Index of layer to update
-            dw (np.ndarray): Gradient of cost function wrt parameters
-            delta (np.ndarray): Backpropagating error
-            lr (float): Learning rate
+            update (dict): Contains gradients and deltas
 
         """
 
-        self.w[index] -= self.learning_rate * dw
-        self.b[index] -= self.learning_rate * np.mean(delta, axis=0)
+        for index, (dw, delta) in update.items():
+            self.w[index] -= lr * dw
+            self.b[index] -= lr * np.mean(delta, axis=0)
 
 
     def _backward(self, y_true):
@@ -143,13 +142,34 @@ class network:
 
         """
 
+        output_z = self.z[self.n_layers - 1]
+        output_a = self.a[self.n_layers - 1]
+        output_act = self.activations[self.n_layers - 1]
+
         # determine partial derivative and delta for the output layer
-        delta = self.loss.backward(y_true, self.a[self.n_layers - 1]) \
-              * self.activations[self.n_layers - 1].backward()
-        dw = np.dot(self.a[self.n_layers - 1].T, delta)
+        print("output_z:", output_z.shape)
+        print("output_a:", output_a.shape)
+        print("y_true:",   y_true.shape)
+        print("self.loss.backward(y_true, output_a):", self.loss.backward(y_true, output_a).shape)
+        print("output_act.backward(output_z, output_a):", output_act.backward(output_z, output_a).shape)
+
+        delta = self.loss.backward(y_true, output_a) * output_act.backward(output_z, output_a)
+        dw = np.dot(output_a.T, delta)
+
+        update = {
+            self.n_layers - 1: (dw, delta)
+        }
+
+        # each iteration requires the delta from the previous layer, propagating backwards.
+        for i in reversed(range(2, self.n_layers)):
+            delta = np.dot(delta, self.w[i].T) * self.activations[i].backward(self.z[i], self.a[i])
+            dw = np.dot(self.a[i - 1].T, delta)
+            update[i - 1] = (dw, delta)
+
+            self._update_params(update)
 
 
-    def fit(self, x, y, lr, n_epochs, batch_size, val_ratio=None, shuffle=True, verbose=True):
+    def fit(self, x, y, lr, n_epochs, batch_size, val_ratio=None, verbose=True):
         """
         Train the multilayer perceptron on the training set
 
@@ -164,40 +184,50 @@ class network:
 
             val_ratio (float): If provided, fraction of data is used for validation
                 default: None
-
-            shuffle (bool): Whether to shuffle the data
-                default: True
             
             verbose (bool): Whether to output stuff during training
                 default: True
 
         Returns:
             history (dict of list): value of loss over epochs.
-                Keys: 'train_loss' [, 'val_loss']
+                Keys: 'loss' [, 'val_loss']
 
         """
 
         if not x.shape[0] == y.shape[0]:
             raise ValueError("Length of x and y arrays don't match")
+        
+        self.lr = lr
 
-        history = []
+        loss_hist = []
+        val_loss_hist = []
+
+        if val_ratio:
+            idx = round(val_ratio * x.shape[0])
+            x_, x_val = x[:idx], x[idx:]
+            y_, y_val = y[:idx], y[idx:]
 
         for e in range(n_epochs):
-            # shuffle the data
-            seed = np.arange(x.shape[0])
-            if shuffle:
-                np.random.shuffle(seed)
-            x_ = x[seed]
-            y_ = y_true[seed]
-
+            t1 = time.time()
             for j in range(x.shape[0] // batch_size):
                 k = j * batch_size
                 l = min((j + 1) * batch_size, x.shape[0])
                 self._forward(x_[k:l])
-                self._backward(self.z, self.a, y_[k:l])
-            
-            if verbose and e % 10 == 0:
-                # TODO: if validation validate, print
-                pass
+                self._backward(y_[k:l])
 
-        return history
+                # compute loss for the batch
+                loss = self.loss.forward(y_[k:l], self.a[self.n_layers - 1])
+                loss_hist.append(loss)
+
+                # compute loss for the validation set
+                self._forward(x_val)
+                self._backward(y_val)
+                val_loss = self.loss.forward(y_val, self.a[self.n_layers - 1])
+            
+            millis = (time.time() - t1) / 1000
+            
+            width = len(str(n_epochs))
+            if verbose and e % 10 == 0:
+                print(f"epoch {e:width}/{n_epochs}:  loss: {loss:.4f}  val_loss: {val_loss:.4f}  {millis:.2f} ms")
+
+        return {'loss': loss_hist, 'val_loss': val_loss_hist}
