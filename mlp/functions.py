@@ -3,17 +3,11 @@
 """
 Activation, loss and cost functions.
 
-Todo:
-    * tanh
-    * sigmoid
-    * relu
-    * leaky_relu
-    * softmax
-    * categorical_crossentropy
-
 """
 
 import numpy as np
+
+_epsilon = 1e-10
 
 
 class activation:
@@ -29,9 +23,9 @@ class activation:
         """
         raise NotImplementedError(f"{self.__class__.__name__}.forward() not implemented")
 
-    def backward(self, z):
+    def backward(self, z, a):
         """
-        Calculates the gradient wrt z
+        Calculates the gradient wrt z, (a: cached activation value)
         """
         raise NotImplementedError(f"{self.__class__.__name__}.backward() not implemented")
 
@@ -58,29 +52,55 @@ class cost:
 
 # activation
 
+class relu(activation):
+    def forward(self, z):
+        return np.maximum(0, z)
+
+    def backward(self, z, a):
+        dz = np.ones_like(z)
+        dz[dz < 0] = 0
+        return dz
+
+
+class leaky_relu(activation):
+    def __init__(self, alpha=0.01):
+        self.alpha = alpha
+
+    def forward(self, z):
+        y1 = ((z > 0) * z)
+        y2 = ((z <= 0) * z * alpha)
+        return y1 + y2
+
+    def backward(self, z, a):
+        dz = np.ones_like(z)
+        dz[dz < 0] = alpha
+        return dz
+
+
 class tanh(activation):
     def forward(self, z):
         return np.tanh(z)
 
-    def backward(self, z):
-        return 1 - np.tanh(z)**2
+    def backward(self, z, a):
+        return 1 - a**2
 
 
 class sigmoid(activation):
     def forward(self, z):
         return 1 / (1 + np.exp(-z))
 
-    def backward(self, z):
-        s = self.forward(z)
-        return s * (1 - s)
+    def backward(self, z, a):
+        return a * (1 - a)
 
 
 class softmax(activation):
     def forward(self, z):
-        pass
+        z = z - z.max(axis=1, keepdims=True)
+        exps = np.exp(z)
+        return exps / exps.sum(axis=1, keepdims=True)
 
-    def backward(self, z):
-        pass
+    def backward(self, z, a):
+        self.old_y * (grad - (grad * self.old_y).sum(axis=1)[:, np.newaxis])
 
 
 # cost
@@ -95,15 +115,17 @@ class mean_squared_error(cost):
 
 class categorical_crossentropy(cost):
     def forward(self, y_true, y_pred):
-        pass
+        # efficient, but assumes y is one-hot
+        return -np.log(y_pred[np.where(y_true)])
 
     def backward(self, y_true, y_pred):
-        pass
+        return -y_true / y_pred
 
 
 class binary_crossentropy(cost):
-    def forward(self, y_true, y_pred):
-        pass
+    pass
+    # def forward(self, y_true, y_pred):
+    #     pass
 
-    def backward(self, y_true, y_pred):
-        pass
+    # def backward(self, y_true, y_pred):
+        # pass
