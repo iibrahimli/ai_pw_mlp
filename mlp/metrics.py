@@ -3,13 +3,6 @@
 """
 Performance metrics.
 
-Todo:
-    * accuracy
-    * precision
-    * recall
-    * f1
-    * kappa
-
 """
 
 import numpy as np
@@ -38,7 +31,47 @@ class metric:
 
 class accuracy(metric):
     """
-    define accuracy
+    Accuracy
+
+    """
+
+    def __call__(self, y_true, y_pred):
+        pass
+
+
+class precision(metric):
+    """
+    Precision
+
+    """
+
+    def __call__(self, y_true, y_pred):
+        pass
+
+
+class recall(metric):
+    """
+    Recall
+
+    """
+
+    def __call__(self, y_true, y_pred):
+        pass
+
+
+class f1(metric):
+    """
+    F1 score
+
+    """
+
+    def __call__(self, y_true, y_pred):
+        pass
+
+
+class kappa(metric):
+    """
+    Kappa coefficient
 
     """
 
