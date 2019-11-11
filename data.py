@@ -43,3 +43,44 @@ def feat_standardize(x):
     stds = x.std(axis=0)
     res = (x - means) / stds
     return (res, means, stds)
+
+
+def int_to_one_hot(x):
+    """
+    One-hot encode integer labels
+
+    Args:
+        x (np.ndarray): Array of integer labels
+        Shape: (n_samples,)
+    
+    Returns:
+        oh (np.ndarray): Array of one hot encoded labels
+        Shape: (n_samples, n_classes)
+    """
+
+    oh = np.zeros((x.size, x.max()+1))
+    oh[np.arange(x.size), x] = 1
+    return oh
+
+
+def shuffle(x, y):
+    """
+    Randomly shuffle data
+    """
+
+    seed = np.arange(x.shape[0])
+    np.random.shuffle(seed)
+    x = x[seed]
+    y = y[seed]
+    return x, y
+
+
+def split(x, y, ratio=0.7):
+    """
+    Split data into training and testing sets
+    """
+
+    idx = round(len(x) * ratio)
+    x_train, y_train = x[:idx], y[:idx]
+    x_test,  y_test  = x[idx:], y[idx:]
+    return (x_train, y_train), (x_test, y_test)
