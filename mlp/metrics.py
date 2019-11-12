@@ -36,7 +36,7 @@ class accuracy(metric):
     """
 
     def __call__(self, y_true, y_pred):
-        pass
+        return np.sum(y_pred == y_true) / y_true.shape[0]
 
 
 class precision(metric):
