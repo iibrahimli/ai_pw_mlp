@@ -95,12 +95,24 @@ class sigmoid(activation):
 
 class softmax(activation):
     def forward(self, z):
-        z = z - z.max(axis=1, keepdims=True)
-        exps = np.exp(z)
-        return exps / exps.sum(axis=1, keepdims=True)
+        def soft(x):
+            x = x - np.max(x)
+            row_sum = np.sum(np.exp(x))
+            return np.array([np.exp(x_i) / row_sum for x_i in x])
+        row_maxes = np.max(z, axis=1)
+        row_maxes = row_maxes[:, np.newaxis]  # for broadcasting
+        z = z - row_maxes
+        return np.array([soft(row) for row in z])
 
     def backward(self, z, a):
-        self.old_y * (grad - (grad * self.old_y).sum(axis=1)[:, np.newaxis])
+        def grad(a):
+            return np.diag(a) - np.outer(a, a)
+        return np.array([grad(row) for row in a])
+    
+
+    def delta(self, z, a, y_true):
+        """Returns error of cross entropy wrt the input of softmax"""
+        return (1 / y_true.shape[0]) * (a - y_true)
 
 
 # cost
@@ -115,11 +127,13 @@ class mean_squared_error(cost):
 
 class categorical_crossentropy(cost):
     def forward(self, y_true, y_pred):
-        # efficient, but assumes y is one-hot
-        return -np.log(y_pred[np.where(y_true)])
+        def cce(y_true, y_pred):
+            # efficient, but assumes y is one-hot
+            return -np.log(y_pred[np.where(y_true)])
+        return np.mean([cce(y_row, s_row) for y_row, s_row in zip(y_true, y_pred)])
 
     def backward(self, y_true, y_pred):
-        return -y_true / y_pred
+        return -(1 / y_true.shape[0]) * (y_true / (y_pred + _epsilon))
 
 
 class binary_crossentropy(cost):
