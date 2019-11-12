@@ -131,8 +131,9 @@ class network:
         """
 
         for index, (dw, delta) in update.items():
-            self.w[index] -= lr * dw
-            self.b[index] -= lr * np.mean(delta, axis=0)
+            print(index, self.w[index].shape, dw.shape, delta.shape)
+            self.w[index] -= self.lr * dw
+            self.b[index] -= self.lr * np.mean(delta, axis=0)
 
 
     def _backward(self, y_true):
@@ -146,25 +147,32 @@ class network:
         output_a = self.a[self.n_layers - 1]
         output_act = self.activations[self.n_layers - 1]
 
-        # determine partial derivative and delta for the output layer
-        print("output_z:", output_z.shape)
-        print("output_a:", output_a.shape)
-        print("y_true:",   y_true.shape)
-        print("self.loss.backward(y_true, output_a):", self.loss.backward(y_true, output_a).shape)
-        print("output_act.backward(output_z, output_a):", output_act.backward(output_z, output_a).shape)
-
-        delta = self.loss.backward(y_true, output_a) * output_act.backward(output_z, output_a)
+        # determine partial derivative and delta for the input of softmax (output_z)
+        delta = output_act.delta(output_z, output_a, y_true)
         dw = np.dot(output_a.T, delta)
+
+        print("delta.shape:", delta.shape)
+        print("output_a.shape:", output_a.shape)
 
         update = {
             self.n_layers - 1: (dw, delta)
         }
 
         # each iteration requires the delta from the previous layer, propagating backwards.
-        for i in reversed(range(2, self.n_layers)):
-            delta = np.dot(delta, self.w[i].T) * self.activations[i].backward(self.z[i], self.a[i])
-            dw = np.dot(self.a[i - 1].T, delta)
-            update[i - 1] = (dw, delta)
+        for i in reversed(range(1, self.n_layers - 1)):
+            print(i)
+            print(self.w[i].shape)
+            print(self.z[i].shape)
+            print(self.a[i].shape)
+            print(delta.shape)
+            print(self.activations[self.n_layers - 2].backward(self.z[self.n_layers - 2], self.a[self.n_layers - 2]).shape)
+
+            if i == self.n_layers - 2:
+                pass
+
+            delta = np.dot(delta, self.w[i + 1].T) * self.activations[i].backward(self.z[i], self.a[i])
+            dw = np.dot(self.a[i].T, delta)
+            update[i] = (dw, delta)
 
             self._update_params(update)
 
@@ -204,21 +212,24 @@ class network:
 
         if val_ratio:
             idx = round(val_ratio * x.shape[0])
-            x_, x_val = x[:idx], x[idx:]
-            y_, y_val = y[:idx], y[idx:]
+            x_train, y_train = x[idx:], y[idx:]
+            x_val, y_val     = x[:idx], y[:idx]
 
         for e in range(n_epochs):
             t1 = time.time()
-            for j in range(x.shape[0] // batch_size):
+
+            for j in range(x_train.shape[0] // batch_size):
                 k = j * batch_size
-                l = min((j + 1) * batch_size, x.shape[0])
-                self._forward(x_[k:l])
-                self._backward(y_[k:l])
+                l = min((j + 1) * batch_size, x_train.shape[0])
+                self._forward(x_train[k:l])
+                self._backward(y_train[k:l])
 
-                # compute loss for the batch
-                loss = self.loss.forward(y_[k:l], self.a[self.n_layers - 1])
-                loss_hist.append(loss)
+            # compute loss for the training set
+            self._forward(x_train)
+            loss = self.loss.forward(y_train, self.a[self.n_layers - 1])
+            loss_hist.append(loss)
 
+            if val_ratio:
                 # compute loss for the validation set
                 self._forward(x_val)
                 self._backward(y_val)
@@ -228,6 +239,6 @@ class network:
             
             width = len(str(n_epochs))
             if verbose and e % 10 == 0:
-                print(f"epoch {e:width}/{n_epochs}:  loss: {loss:.4f}  val_loss: {val_loss:.4f}  {millis:.2f} ms")
+                print(f"epoch {e:<{width}}/{n_epochs}:  loss: {loss:.4f}  val_loss: {val_loss:.4f}  {millis:.2f} ms")
 
         return {'loss': loss_hist, 'val_loss': val_loss_hist}
