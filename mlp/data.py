@@ -70,9 +70,7 @@ def shuffle(x, y):
 
     seed = np.arange(x.shape[0])
     np.random.shuffle(seed)
-    x = x[seed]
-    y = y[seed]
-    return x, y
+    return x[seed], y[seed]
 
 
 def split(x, y, ratio=0.7):
