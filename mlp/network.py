@@ -3,6 +3,7 @@
 import time
 import numpy as np
 from .functions import *
+from .data import shuffle
 
 
 class network:
@@ -147,9 +148,10 @@ class network:
         output_a = self.a[self.n_layers - 1]
         output_act = self.activations[self.n_layers - 1]
 
-        # determine partial derivative and delta for the input of softmax (output_z)
-        delta = output_act.delta(output_z, output_a, y_true)
-        dw = np.dot(output_a.T, delta)
+        # determine partial derivative and delta for the input of output activation function (output_z)
+        # delta = output_act.delta(output_z, output_a, y_true)
+        delta = self.loss.backward(y_true, output_a) * output_act.backward(output_z, output_a)
+        dw = np.dot(self.a[self.n_layers - 2].T, delta)
 
         print("delta.shape:", delta.shape)
         print("output_a.shape:", output_a.shape)
@@ -158,26 +160,30 @@ class network:
             self.n_layers - 1: (dw, delta)
         }
 
+        delta = np.dot(delta, self.w[self.n_layers-1].T)
+
         # each iteration requires the delta from the previous layer, propagating backwards.
         for i in reversed(range(1, self.n_layers - 1)):
-            print(i)
-            print(self.w[i].shape)
-            print(self.z[i].shape)
-            print(self.a[i].shape)
-            print(delta.shape)
-            print(self.activations[self.n_layers - 2].backward(self.z[self.n_layers - 2], self.a[self.n_layers - 2]).shape)
+            print("i:", i)
+            print("self.w[i].shape:", self.w[i].shape)
+            print("self.z[i].shape:", self.z[i].shape)
+            print("self.a[i].shape:", self.a[i].shape)
+            print("delta.shape:", delta.shape)
+            print("self.w[i + 1].T.shape:", self.w[i + 1].T.shape)
 
-            if i == self.n_layers - 2:
-                pass
-
-            delta = np.dot(delta, self.w[i + 1].T) * self.activations[i].backward(self.z[i], self.a[i])
+            delta = np.dot(delta, self.w[i].T) * self.activations[i].backward(self.z[i], self.a[i])
             dw = np.dot(self.a[i].T, delta)
             update[i] = (dw, delta)
 
-            self._update_params(update)
+            print("========================")
+            print("delta.shape:", delta.shape)
+            print("dw.shape:", dw.shape)
+            print("========================")
+
+        self._update_params(update)
 
 
-    def fit(self, x, y, lr, n_epochs, batch_size, val_ratio=None, verbose=True):
+    def fit(self, x, y, lr, n_epochs, batch_size, shuffle_data=True, val_ratio=None, verbose=True):
         """
         Train the multilayer perceptron on the training set
 
@@ -190,7 +196,10 @@ class network:
 
             batch_size (int): Batch size
 
-            val_ratio (float): If provided, fraction of data is used for validation
+            shuffle_data (bool): Whether to shuffle data before each epoch
+                default: True
+
+            val_ratio (float): If provided, a fraction of data is used for validation
                 default: None
             
             verbose (bool): Whether to output stuff during training
@@ -218,6 +227,9 @@ class network:
         for e in range(n_epochs):
             t1 = time.time()
 
+            if shuffle_data:
+                x_train, y_train = shuffle(x_train, y_train)
+
             for j in range(x_train.shape[0] // batch_size):
                 k = j * batch_size
                 l = min((j + 1) * batch_size, x_train.shape[0])
@@ -234,9 +246,9 @@ class network:
                 self._forward(x_val)
                 self._backward(y_val)
                 val_loss = self.loss.forward(y_val, self.a[self.n_layers - 1])
-            
+
             millis = (time.time() - t1) / 1000
-            
+
             width = len(str(n_epochs))
             if verbose and e % 10 == 0:
                 print(f"epoch {e:<{width}}/{n_epochs}:  loss: {loss:.4f}  val_loss: {val_loss:.4f}  {millis:.2f} ms")
