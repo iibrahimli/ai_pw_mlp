@@ -64,11 +64,15 @@ history = net.fit(
 y_test_pred = net.predict(x_test)
 y_test_pred_int = np.argmax(y_test_pred, axis=1)
 test_acc = acc(y_test_int, y_test_pred_int)
+print()
 print("----------")
 print(f"accuracy on test set ({len(x_test)} samples): {test_acc:.2f}")
 
 
+
 # plot training
+print()
+print("Uncomment lines 76-90 in main.py to plot training graphs")
 # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
 # ax1.plot(history['train_loss'], label='train_loss')
