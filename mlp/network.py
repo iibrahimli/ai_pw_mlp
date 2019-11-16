@@ -132,7 +132,6 @@ class network:
         """
 
         for index, (dw, delta) in update.items():
-            print(index, self.w[index].shape, dw.shape, delta.shape)
             self.w[index] -= self.lr * dw
             self.b[index] -= self.lr * np.mean(delta, axis=0)
 
@@ -149,48 +148,35 @@ class network:
         output_act = self.activations[self.n_layers - 1]
 
         # determine partial derivative and delta for the input of output activation function (output_z)
-        # delta = output_act.delta(output_z, output_a, y_true)
-        delta = self.loss.backward(y_true, output_a) * output_act.backward(output_z, output_a)
+        if isinstance(output_act, softmax):
+            delta = output_act.delta(output_z, output_a, y_true)
+        else:
+            delta = self.loss.backward(y_true, output_a) * output_act.backward(output_z, output_a)
         dw = np.dot(self.a[self.n_layers - 2].T, delta)
-
-        print("delta.shape:", delta.shape)
-        print("output_a.shape:", output_a.shape)
 
         update = {
             self.n_layers - 1: (dw, delta)
         }
 
-        delta = np.dot(delta, self.w[self.n_layers-1].T)
+        # delta = np.dot(delta, self.w[self.n_layers-1].T)
 
-        # each iteration requires the delta from the previous layer, propagating backwards.
+        # each iteration requires the delta from the "higher" layer, propagating backwards.
         for i in reversed(range(1, self.n_layers - 1)):
-            print("i:", i)
-            print("self.w[i].shape:", self.w[i].shape)
-            print("self.z[i].shape:", self.z[i].shape)
-            print("self.a[i].shape:", self.a[i].shape)
-            print("delta.shape:", delta.shape)
-            print("self.w[i + 1].T.shape:", self.w[i + 1].T.shape)
-
-            delta = np.dot(delta, self.w[i].T) * self.activations[i].backward(self.z[i], self.a[i])
-            dw = np.dot(self.a[i].T, delta)
+            delta = np.dot(delta, self.w[i+1].T) * self.activations[i].backward(self.z[i], self.a[i])
+            dw = np.dot(self.a[i-1].T, delta)
             update[i] = (dw, delta)
-
-            print("========================")
-            print("delta.shape:", delta.shape)
-            print("dw.shape:", dw.shape)
-            print("========================")
 
         self._update_params(update)
 
 
-    def fit(self, x, y, lr, n_epochs, batch_size, shuffle_data=True, val_ratio=None, verbose=True):
+    def fit(self, x, y, lr, n_epochs, batch_size, shuffle_data=True, val_ratio=None, metrics=None, print_stats=100):
         """
         Train the multilayer perceptron on the training set
 
         Args:
             x, y (np.ndarray): Training data
 
-            lr (float): Learning rate
+            lr (float or tuple): Learning rate or annealing schedule in form (initial lr, every_n_epochs, multiplier)
 
             n_epochs (int): Number of epochs
 
@@ -202,8 +188,11 @@ class network:
             val_ratio (float): If provided, a fraction of data is used for validation
                 default: None
             
-            verbose (bool): Whether to output stuff during training
-                default: True
+            metrics (list of metric): Metric functions to compute every epoch
+                default: None
+            
+            print_stats (int): Output stuff every _ epochs during training (silent if None)
+                default: 1
 
         Returns:
             history (dict of list): value of loss over epochs.
@@ -214,18 +203,43 @@ class network:
         if not x.shape[0] == y.shape[0]:
             raise ValueError("Length of x and y arrays don't match")
         
-        self.lr = lr
+        if isinstance(lr, tuple):
+            self.lr = lr[0]
+            self.lr_n_epochs = lr[1]
+            self.lr_multiplier = lr[2]
+        elif isinstance(lr, float):
+            self.lr = lr
+            self.lr_n_epochs = -1
+            self.lr_multiplier = 1
+        else:
+            raise TypeError("lr must be one of float or tuple")
 
-        loss_hist = []
-        val_loss_hist = []
+        history = {
+            'train_loss': [],
+            'val_loss': []
+        }
+
+        if metrics:
+            for m in metrics:
+                m_name = m.__class__.__name__
+                history[f'train_{m_name}'] = []
+                history[f'val_{m_name}'] =  []
 
         if val_ratio:
             idx = round(val_ratio * x.shape[0])
             x_train, y_train = x[idx:], y[idx:]
             x_val, y_val     = x[:idx], y[:idx]
+            print(f"Train on {x_train.shape[0]} samples, validate on {x_val.shape[0]} samples for {n_epochs} epochs")
+        else:
+            print(f"Train on {x_train.shape[0]} samples for {n_epochs} epochs")
 
         for e in range(n_epochs):
-            t1 = time.time()
+            t1 = time.perf_counter()
+
+            # lr annealing
+            if e != 0 and self.lr_n_epochs != -1 and e % self.lr_n_epochs == 0:
+                self.lr *= self.lr_multiplier
+                print(f"lr = {self.lr:.2e}")
 
             if shuffle_data:
                 x_train, y_train = shuffle(x_train, y_train)
@@ -238,19 +252,37 @@ class network:
 
             # compute loss for the training set
             self._forward(x_train)
-            loss = self.loss.forward(y_train, self.a[self.n_layers - 1])
-            loss_hist.append(loss)
+            train_loss = self.loss.forward(y_train, self.a[self.n_layers - 1])
+            history['train_loss'].append(train_loss)
+
+            # compute metrics for the validation set
+            for m in metrics:
+                m_name = m.__class__.__name__
+                y_train_int = np.argmax(y_train, axis=1)
+                y_train_pred_int = np.argmax(self.a[self.n_layers - 1], axis=1)
+                history[f'train_{m_name}'].append(m(y_train_int, y_train_pred_int))
 
             if val_ratio:
                 # compute loss for the validation set
                 self._forward(x_val)
-                self._backward(y_val)
                 val_loss = self.loss.forward(y_val, self.a[self.n_layers - 1])
+                history['val_loss'].append(val_loss)
 
-            millis = (time.time() - t1) / 1000
+                # compute metrics for the validation set
+                for m in metrics:
+                    m_name = m.__class__.__name__
+                    y_val_int = np.argmax(y_val, axis=1)
+                    y_val_pred_int = np.argmax(self.a[self.n_layers - 1], axis=1)
+                    history[f'val_{m_name}'].append(m(y_val_int, y_val_pred_int))
+
+            millis = (time.perf_counter() - t1) * 1_000
 
             width = len(str(n_epochs))
-            if verbose and e % 10 == 0:
-                print(f"epoch {e:<{width}}/{n_epochs}:  loss: {loss:.4f}  val_loss: {val_loss:.4f}  {millis:.2f} ms")
+            if print_stats and e % print_stats == 0:
+                print(f"epoch {e:<{width}}/{n_epochs}:  train_loss: {train_loss:.4f}  val_loss: {val_loss:.4f}  ", end='')
+                for m in metrics:
+                    m_name = m.__class__.__name__
+                    print(f"train_{m_name}: {history[f'train_{m_name}'][-1]:.4f}  val_{m_name}: {history[f'val_{m_name}'][-1]:.4f}  ", end='')
+                print(f"{millis:.2f} ms/epoch")
 
-        return {'loss': loss_hist, 'val_loss': val_loss_hist}
+        return history
